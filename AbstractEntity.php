@@ -30,6 +30,8 @@ use \Illuminate\Support\Contracts\ArrayableInterface;
  */
 class AbstractEntity extends GenericEntity implements ArrayableInterface, JsonableInterface
 {
+    use Getter;
+
     /**
      * dirty
      *
@@ -37,10 +39,19 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
      */
     protected $dirty = false;
 
+    /**
+     * original
+     *
+     * @var array
+     */
     protected $original;
 
-    use Getter;
 
+    /**
+     * @param array $data
+     *
+     * @access public
+     */
     public function __construct(array $data)
     {
         $this->original = $data;
@@ -48,7 +59,7 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
     }
 
     /**
-     * isDirty
+     * we are dirty or not. lets play.
      *
      * @access public
      * @return bool
