@@ -152,21 +152,6 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
     }
 
     /**
-     * offsetSet
-     *
-     * @param mixed $attr
-     * @param mixed $value
-     *
-     * @access public
-     * @return mixed
-     */
-    //public function offsetSet($attr, $value)
-    //{
-    //    $this->setDirty(true);
-    //    return parent::offsetSet($attr, $value);
-    //}
-
-    /**
      * toJson
      *
      * @param int $options

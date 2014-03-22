@@ -104,6 +104,14 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
         }
     }
 
+    /**
+     * offsetGet
+     *
+     * @param mixed $attr
+     *
+     * @access public
+     * @return mixed
+     */
     public function offsetGet($attr)
     {
         $value = $this->getDefault($this->data, $attr, null);
@@ -121,6 +129,15 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
         return $value;
     }
 
+    /**
+     * addEagerLoadingConstraint
+     *
+     * @param mixed $constraint
+     * @param callable $callable
+     *
+     * @access public
+     * @return void
+     */
     public function addEagerLoadingConstraint($constraint, callable $callable)
     {
         $this->eglConstraints[$constraint] = $callable;
