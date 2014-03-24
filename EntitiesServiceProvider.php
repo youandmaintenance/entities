@@ -76,23 +76,10 @@ class EntitiesServiceProvider extends ServiceProvider
      */
     protected function setEntityRelations(Manager $manager)
     {
-        $manager->setRelation('sections', 'entries', [
-            'relationship'  => 'has_many',
-            'native_field'  => 'uuid',
-            'foreign_field' => 'section_uuid'
-        ]);
-
         $manager->setRelation('sections', 'fields', [
             'relationship'  => 'has_many',
             'native_field'  => 'uuid',
             'foreign_field' => 'section_uuid'
-        ]);
-
-        $manager->setRelation('entries', 'section', [
-            'relationship'  => 'belongs_to',
-            'foreign_type'  => 'sections',
-            'native_field'  => 'section_uuid',
-            'foreign_field' => 'uuid'
         ]);
 
         $manager->setRelation('fields', 'section', [
@@ -101,6 +88,24 @@ class EntitiesServiceProvider extends ServiceProvider
             'native_field'  => 'section_uuid',
             'foreign_field' => 'uuid'
         ]);
+
+        //$manager->setRelation('sections', 'entries', [
+        //    'relationship'  => 'has_many',
+        //    'native_field'  => 'uuid',
+        //    'foreign_field' => 'section_uuid'
+        //]);
+
+        //$manager->setRelation('entries', 'section', [
+        //    'relationship'  => 'belongs_to',
+        //    'foreign_type'  => 'sections',
+        //    'native_field'  => 'section_uuid',
+        //    'foreign_field' => 'uuid'
+        //]);
+    }
+
+    public function boot()
+    {
+        $this->registerValidators();
     }
 
     /**
@@ -114,7 +119,16 @@ class EntitiesServiceProvider extends ServiceProvider
     protected function setRepositories(Manager $manager)
     {
         $this->app->bindShared('yam.sectionrepository', function () use ($manager) {
-            return new SectionRepository($manager, $this->app['db']);
+            return new SectionRepository($manager, $this->app['db'], $this->app['yam.validators']);
         });
+    }
+
+    protected function registerValidators()
+    {
+        $validators = $this->app['yam.validators'];
+
+        foreach (include __DIR__.'/rules/rules.php' as $name => $data) {
+            $validators->register($name, $data['class'], $data['rules']);
+        }
     }
 }

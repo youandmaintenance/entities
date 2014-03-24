@@ -55,7 +55,22 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
     public function __construct(array $data)
     {
         $this->original = $data;
-        parent::__construct($data);
+        $this->fill($data);
+    }
+
+    /**
+     * fill
+     *
+     * @param array $data
+     *
+     * @access portected
+     * @return void
+     */
+    protected function fill(array $data)
+    {
+        foreach ($data as $key => $value) {
+            $this->setAttribute($key, $value);
+        }
     }
 
     /**
