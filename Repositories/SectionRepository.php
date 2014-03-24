@@ -85,7 +85,7 @@ class SectionRepository
     {
         $this->validateSectionData($data);
 
-        $section = $this->makeSection($data);
+        $section = $this->makeSection($data, false);
 
         $this->updateCount();
 
@@ -102,11 +102,11 @@ class SectionRepository
      */
     public function update($uuid, array $data)
     {
-        $section = $this->find($uuid);
-
         $this->validateSectionData($data);
 
-        return null;
+        $this->updateSection($uuid, $data);
+
+        return $this->find($uuid);
     }
 
     /**
@@ -433,11 +433,27 @@ class SectionRepository
 
         unset($data['fields']);
 
+        $this->saveSection($this->getSectionData($data), $fields);
+
+        return $this->find($uuid);
+    }
+
+    /**
+     * saveSection
+     *
+     * @param array $sectionData
+     * @param array $fieldData
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function saveSection(array $sectionData, array $fieldData)
+    {
         // transaction save section:
         $this->db->beginTransaction();
 
         try {
-            $this->newSectionQuery()->insert($this->getSectionData($data));
+            $this->newSectionQuery()->insert($sectionData);
         } catch (\Exception $e) {
             $this->db->rollback();
             throw new EntityCreateException($e->getMessage());
@@ -445,15 +461,27 @@ class SectionRepository
 
         // transaction save fields:
         try {
-            $this->newFieldQuery()->insert($fields);
+            $this->newFieldQuery()->insert($fieldData);
         } catch (\Exception $e) {
             $this->db->rollback();
             throw new EntityCreateException($e->getMessage());
         }
 
         $this->db->commit();
+    }
 
-        return $this->find($uuid);
+    /**
+     * updateSection
+     *
+     * @param mixed $uuid
+     * @param array $data
+     *
+     * @access protected
+     * @return void
+     */
+    protected function updateSection($uuid, array $data)
+    {
+        $this->updateTimestamp($data);
     }
 
     /**
@@ -466,6 +494,20 @@ class SectionRepository
     {
         $data['created_at'] = (string)$this->newTimestamp();
         $data['updated_at'] = $new ? $data['created_at'] : (string)$this->newTimestamp();
+    }
+
+    /**
+     * updateTimestamps
+     *
+     * @param array $data
+     * @param mixed $new
+     *
+     * @access protected
+     * @return void
+     */
+    protected function updateTimestamp(array &$data)
+    {
+        $data['updated_at'] = (string)$this->newTimestamp();
     }
 
     /**
