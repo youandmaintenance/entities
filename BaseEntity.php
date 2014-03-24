@@ -26,6 +26,7 @@ use \Aura\Marshal\Lazy\LazyInterface;
  */
 abstract class BaseEntity extends AbstractEntity implements AssignableConstraintInterface
 {
+
     /**
      * assignable
      *
@@ -100,7 +101,7 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
     public function offsetSet($attr, $value)
     {
         if ($this->isAssignable($attr = strtolower($attr))) {
-            return parent::offsetSet($attr, $value);
+            return parent::offsetSet($attr, $this->setAttributeValue($attr, $value));
         }
     }
 
@@ -114,7 +115,7 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
      */
     public function offsetGet($attr)
     {
-        $value = $this->getDefault($this->data, $attr, null);
+        $value = $this->getAttributeValue($attr, $this->getDefault($this->data, $attr, null));
 
         if ($value instanceof LazyInterface) {
 
@@ -127,6 +128,19 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
         }
 
         return $value;
+    }
+
+    /**
+     * getIdAttributeValue
+     *
+     * @param mixed $value
+     *
+     * @access public
+     * @return mixed
+     */
+    public function getIdAttributeValue($value)
+    {
+        return (int)$value;
     }
 
     /**
@@ -196,6 +210,11 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
     public function isImmutable($key)
     {
         return !$this->isNew() && in_array($key, $this->getImmutableKeys());
+    }
+
+    public function getData()
+    {
+        return $this->data;
     }
 
     /**

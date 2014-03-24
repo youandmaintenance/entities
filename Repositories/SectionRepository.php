@@ -200,6 +200,20 @@ class SectionRepository
         return $validator;
     }
 
+    protected function applyAttributes($resource, array $options)
+    {
+        if ($resource instanceof Collection) {
+            foreach ($resource as $entity) {
+                $this->applyAttributes($entity, $options);
+            }
+            return;
+        }
+
+        foreach ($options as $attribute) {
+            $resource->getAttribute($attribute);
+        }
+    }
+
     /**
      * fetch
      *
@@ -209,20 +223,23 @@ class SectionRepository
      * @access public
      * @return mixed either a Section or a SectionCollection
      */
-    public function find($uuid)
+    public function find($uuid, array $options = [])
     {
-
         if (!(bool)$uuid) {
             throw new \InvalidArgumentException();
         }
 
         if (null !== ($result = $this->getLoadedSectionsById($uuid))) {
+            $this->applyAttributes($result, $options);
             return $result;
         }
 
         if ($this->findOnce === $uuid) {
             $this->findOnce = null;
-            return null;
+
+            throw new EntityNotFoundException(
+                sprintf('Section(s) with uuid %s not found', implode(', ', (array)$uuid))
+            );
         }
 
         $callback = $this->prepareSection($uuid);
@@ -235,7 +252,7 @@ class SectionRepository
 
         $this->findOnce &= $uuid;
 
-        return $this->find($uuid);
+        return $this->find($uuid, $options);
     }
 
     /**
@@ -284,12 +301,67 @@ class SectionRepository
      */
     protected function createFields(array $fields, $uuid)
     {
+        $data = [];
         foreach ($fields as $index => $field) {
             $this->addTimestamps($fields[$index], true);
             $fields[$index]['section_uuid'] = $uuid;
+
+            $data[$index] = $this->getFieldData($fields[$index]);
         }
 
-        return $fields;
+        return $data;
+    }
+
+    /**
+     * getSectionData
+     *
+     * @param array $raw
+     *
+     * @access protected
+     * @return array
+     */
+    protected function getSectionData(array $raw)
+    {
+        return $this->newSectionInstance($raw)->getData();
+    }
+
+    /**
+     * getFieldData
+     *
+     * @param array $raw
+     *
+     * @access protected
+     * @return array
+     */
+    protected function getFieldData(array $raw)
+    {
+        return $this->newFieldInstance($raw)->getData();
+    }
+
+    /**
+     * newSectionInstance
+     *
+     * @param array $data
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function newSectionInstance(array $data = [])
+    {
+        return $this->manager->sections->getEntityBuilder()->newInstance($data);
+    }
+
+    /**
+     * newFieldInstance
+     *
+     * @param array $data
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function newFieldInstance(array $data = [])
+    {
+        return $this->manager->fields->getEntityBuilder()->newInstance($data);
     }
 
     /**
@@ -333,6 +405,19 @@ class SectionRepository
     }
 
     /**
+     * makeSlug
+     *
+     * @param mixed $value
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function makeHandle($value)
+    {
+        return strtr(\Str::slug($value), ['-' => '_']);
+    }
+
+    /**
      * makeSection
      *
      * @access protected
@@ -352,7 +437,7 @@ class SectionRepository
         $this->db->beginTransaction();
 
         try {
-            $this->newSectionQuery()->insert($data);
+            $this->newSectionQuery()->insert($this->getSectionData($data));
         } catch (\Exception $e) {
             $this->db->rollback();
             throw new EntityCreateException($e->getMessage());
@@ -434,7 +519,6 @@ class SectionRepository
         return json_decode(json_encode($data), true);
     }
 
-
     /**
      * getQueries
      *
@@ -498,8 +582,7 @@ class SectionRepository
         $query = $this->newFieldQuery();
 
         if (null !== $uuid) {
-            $where = is_array($uuid) ? 'whereIn' : 'where';
-            $query->{$where}('section_uuid', $uuid);
+            call_user_func_array([$query, is_array($uuid) ? 'whereIn' : 'where'], ['section_uuid', $uuid]);
         }
 
         return $query;

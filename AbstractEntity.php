@@ -99,6 +99,33 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
     }
 
     /**
+     * getAttributeValue
+     *
+     * @param mixed $attr
+     * @param mixed $value
+     *
+     * @access public
+     * @return mixed
+     */
+    public function getAttributeValue($attr, $value)
+    {
+        if (method_exists($this, $method = 'get'.ucfirst(camel_case($attr)).'AttributeValue')) {
+            return call_user_func([$this, $method], $value);
+        }
+
+        return $value;
+    }
+
+    public function setAttributeValue($attr, $value)
+    {
+        if (method_exists($this, $method = 'set'.ucfirst(camel_case($attr)).'AttributeValue')) {
+            return call_user_func([$this, $method], $value);
+        }
+
+        return $value;
+    }
+
+    /**
      * setAttribute
      *
      * @param mixed $attr
@@ -197,7 +224,8 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
             } else {
                 $value = $data;
             }
-            $clean[$key] = $value;
+            $clean[$key] = $this->getAttributeValue($key, $value);
+            //$clean[$key] = $value;
         }
         return $clean;
     }

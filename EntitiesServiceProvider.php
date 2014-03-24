@@ -121,6 +121,10 @@ class EntitiesServiceProvider extends ServiceProvider
         $this->app->bindShared('yam.sectionrepository', function () use ($manager) {
             return new SectionRepository($manager, $this->app['db'], $this->app['yam.validators']);
         });
+
+        $this->app->singleton('Yam\Entities\Repositories\SectionRepository', function () use ($manager) {
+            return $this->app->make('yam.sectionrepository');
+        });
     }
 
     protected function registerValidators()

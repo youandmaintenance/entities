@@ -22,6 +22,20 @@ namespace Yam\Entities;
  */
 class Section extends BaseEntity
 {
+
+    /**
+     * getVersionableAttributeValue
+     *
+     * @param mixed $value
+     *
+     * @access public
+     * @return mixed
+     */
+    public function getVersionableAttributeValue($value)
+    {
+        return (bool)$value;
+    }
+
     /**
      * countFields
      *
