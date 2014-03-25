@@ -115,15 +115,17 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
      */
     public function offsetGet($attr)
     {
-        $value = $this->getAttributeValue($attr, $this->getDefault($this->data, $attr, null));
-
-        if ($value instanceof LazyInterface) {
+        if (
+            ($value = $this->getAttributeValue($attr, $this->getDefault($this->data, $attr, null)))
+            instanceof LazyInterface
+        ) {
 
             if ($this->hasEglConstraint($attr)) {
                 $this->loadEglConstraint($attr);
             }
 
             $value = $value->get($this);
+
             $this->offsetSet($attr, $value);
         }
 

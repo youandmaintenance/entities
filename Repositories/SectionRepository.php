@@ -13,6 +13,7 @@ namespace Yam\Entities\Repositories;
 
 use \Carbon\Carbon;
 use \Aura\Marshal\Manager;
+use \Yam\Entities\Section;
 use \Yam\Validators\ValidationRepository;
 use \Yam\Utils\Traits\UuidGeneratorTrait;
 use \Illuminate\Database\DatabaseManager;
@@ -32,6 +33,16 @@ class SectionRepository
     use UuidGeneratorTrait {
         UuidGeneratorTrait::createUuid as private makeUuid;
     }
+
+    /**
+     * @var string
+     */
+    const TABLE_SECTIONS = 'sections';
+
+    /**
+     * @var string
+     */
+    const TABLE_FIELDS = 'fields';
 
     /**
      * manager
@@ -62,9 +73,12 @@ class SectionRepository
     protected $findOnce;
 
     /**
-     * @param Manager $manager
+     * @param Manager              $manager
+     * @param DatabaseManager      $database
+     * @param ValidationRepository $validator
      *
      * @access public
+     * @return mixed
      */
     public function __construct(Manager $manager, DatabaseManager $database, ValidationRepository $validator)
     {
@@ -211,13 +225,21 @@ class SectionRepository
             );
         }
 
-        $data = $section->getData();
+        $section->fields;
+        $this->update($section->uuid, $section->toArray());
+    }
 
-        foreach ($section->fields as $index => $field) {
-            $data['fields'][$index] = $field->getData();
-        }
-
-        $this->update($data, $section->uuid);
+    /**
+     * deleteSection
+     *
+     * @param \Yam\Entities\Section $section
+     *
+     * @access public
+     * @return mixed
+     */
+    public function deleteSection(Section $section)
+    {
+        return $this->delete($section->uuid);
     }
 
     /**
@@ -228,23 +250,24 @@ class SectionRepository
      * @access public
      * @return void
      */
-    public function delete(Section $section)
+    public function delete($uuid)
     {
-        $this->db->beginTransaction();
-
+        $section = $this->find($uuid);
         $fields = $section->fields;
 
+        $this->db->beginTransaction();
+
         try {
-            $this->newSectionQuery()->delete($section->uuid);
-            $this->manager->sections->deleteEntity($section->uuid);
+            $this->newSectionQuery()->delete($uuid);
+            $this->manager->sections->delete($uuid);
         } catch (\Exception $e) {
             $this->db->rollback();
             throw $e;
         }
 
         try {
-            $this->newFieldQuery()->delete($section->uuid);
-            $this->manager->sections->deleteEntity($section->uuid);
+            $this->newFieldQuery()->delete($fieldIds = $fields->pluck('id'));
+            $this->manager->fields->delete($fieldIds);
         } catch (\Exception $e) {
             $this->db->rollback();
             throw $e;
@@ -409,26 +432,25 @@ class SectionRepository
     }
 
     /**
-     * newSectionQuery
-     *
+     * Initialize a new query on the sections table.
      *
      * @access protected
-     * @return mixed
+     * @return \Illuminate\Database\Query\Builder
      */
     protected function newSectionQuery()
     {
-        return $this->db->table('sections');
+        return $this->db->table(static::TABLE_SECTIONS);
     }
 
     /**
-     * newFieldQuery
+     * Initialize a new query on the fields table.
      *
      * @access protected
-     * @return mixed
+     * @return \Illuminate\Database\Query\Builder
      */
     protected function newFieldQuery()
     {
-        return $this->db->table('fields');
+        return $this->db->table(static::TABLE_FIELDS);
     }
 
     /**
@@ -487,7 +509,9 @@ class SectionRepository
 
         // update section
         try {
-            $this->newSectionQuery()->update($data);
+            $this->newSectionQuery()
+                ->where('uuid', $uuid)
+                ->update($data);
         } catch (\Exception $e) {
             $this->db->rollback();
             throw $e;
@@ -504,7 +528,9 @@ class SectionRepository
         // updated fields
         try {
             foreach ($diff['updated'] as $updated) {
-                $this->newFieldQuery()->update($updated);
+                $this->newFieldQuery()
+                    ->where('id', $updated['id'])
+                    ->update($updated);
             }
         } catch (\Exception $e) {
             $this->db->rollback();
@@ -530,7 +556,7 @@ class SectionRepository
 
         $fields = $this->execQuery($this->getFieldsQuery($uuid));
 
-        $this->manager->fields->loadData($fields);
+        $this->manager->fields->load($fields);
 
         return $this->find($uuid);
     }
@@ -561,9 +587,9 @@ class SectionRepository
 
                 $keys[] = $fieldData['id'];
 
-                if ($existingFields->find($fieldData['id'])->isDirty()) {
+                if ($this->manager->fields->getEntity($fieldData['id'])->isDirty()) {
                     $this->updateTimestamp($fieldData);
-                    $updated = $fieldData;
+                    $updated[] = $this->newFieldInstance($fieldData)->getData();
                 }
 
                 continue;
@@ -572,7 +598,7 @@ class SectionRepository
             $this->addTimestamps($fieldData);
             $fieldData['section_uuid'] = $uuid;
 
-            $new[] = $fieldData;
+            $new[] = $this->newFieldInstance($fieldData)->getData();
         }
 
         $deleted = array_diff($existsingFieldKeys, $keys);
@@ -791,10 +817,10 @@ class SectionRepository
      * @access protected
      * @return mixed
      */
-	protected function newTimestamp()
-	{
-		return new Carbon;
-	}
+    protected function newTimestamp()
+    {
+        return new Carbon;
+    }
 
     /**
      * validateSectionData
@@ -813,7 +839,7 @@ class SectionRepository
         if (!isset($data['fields']) || empty($data['fields'])) {
 
             $validator->fails(['fields' => ['empty fields']]);
-            throw new ValidationException('validation failed', $validator->errors());
+            throw new ValidationException('validation failed', $validator->getErrors());
         }
 
         $messages = [];
