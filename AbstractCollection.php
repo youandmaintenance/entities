@@ -23,6 +23,19 @@ use \Illuminate\Support\Contracts\ArrayableInterface;
 class AbstractCollection extends GenericCollection implements JsonableInterface, ArrayableInterface
 {
     /**
+     * pluck
+     *
+     * @param mixed $attribute
+     *
+     * @access public
+     * @return mixed
+     */
+    public function pluck($attribute)
+    {
+        return array_pluck($this->data, $attribute);
+    }
+
+    /**
      * toArray
      *
      * @access public
@@ -31,8 +44,16 @@ class AbstractCollection extends GenericCollection implements JsonableInterface,
     public function toArray()
     {
         $data = [];
+
         foreach ($this->data as $key => $entity) {
-            $data[$key] = $entity->toArray();
+            if ($entity instanceof ArrayableInterface) {
+                $value = $entity->toArray();
+            } elseif (is_object($entity)) {
+                $value = (array)$entity;
+            } else {
+                $value = $entity;
+            }
+            $data[$key] = $value;
         }
 
         return $data;

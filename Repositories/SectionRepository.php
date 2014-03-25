@@ -74,154 +74,15 @@ class SectionRepository
     }
 
     /**
-     * create
-     *
-     * @param array $data
-     *
-     * @access public
-     * @return mixed
-     */
-    public function create(array $data)
-    {
-        $this->validateSectionData($data);
-
-        $section = $this->makeSection($data, false);
-
-        $this->updateCount();
-
-        return $section;
-    }
-
-    /**
-     * update
-     *
-     * @param Section $section
-     *
-     * @access public
-     * @return mixed
-     */
-    public function update($uuid, array $data)
-    {
-        $this->validateSectionData($data);
-
-        $this->updateSection($uuid, $data);
-
-        return $this->find($uuid);
-    }
-
-    /**
-     * delete
-     *
-     * @param Section $section
-     *
-     * @access public
-     * @return mixed
-     */
-    public function delete(Section $section)
-    {
-        $this->db->beginTransaction();
-
-        try {
-            $this->newSectionQuery()->delete($section->uuid);
-            $this->manager->sections->deleteEntity($section->uuid);
-        } catch (\Exception $e) {
-            $this->db->rollback();
-            throw $e;
-        }
-
-        $this->db->commit();
-    }
-
-    /**
-     * save
-     *
-     * @access public
-     * @return void
-     */
-    public function save(Section $section)
-    {
-        $this->db->beginTransaction();
-
-        $section->updated_at = (string)$this->newTimestamp();
-
-        try {
-            $this->newSectionQuery()->insert($section->getOwnAttributes());
-        } catch (\Exception $e) {
-            $this->db->rollback();
-            throw $e;
-        }
-
-        // save fields:
-        $this->saveFields($section->fields);
-
-        $this->db->commit();
-    }
-
-    /**
-     * saveFields
-     *
-     * @param Collection $fields
-     *
-     * @access protected
-     * @return mixed
-     */
-    protected function saveFields(Collection $fields)
-    {
-
-    }
-
-    /**
-     * getSectionValidator
-     *
-     * @param array $data
-     *
-     * @access protected
-     * @return mixed
-     */
-    protected function getSectionValidator(array $data = [])
-    {
-        $validator = $this->validator->get('yam.section');
-        $validator->with($data);
-        return $validator;
-    }
-
-    /**
-     * getSectionValidator
-     *
-     * @param array $data
-     *
-     * @access protected
-     * @return mixed
-     */
-    protected function getFieldValidator(array $data = [])
-    {
-        $validator = $this->validator->get('yam.field');
-        $validator->with($data);
-        return $validator;
-    }
-
-    protected function applyAttributes($resource, array $options)
-    {
-        if ($resource instanceof Collection) {
-            foreach ($resource as $entity) {
-                $this->applyAttributes($entity, $options);
-            }
-            return;
-        }
-
-        foreach ($options as $attribute) {
-            $resource->getAttribute($attribute);
-        }
-    }
-
-    /**
-     * fetch
+     * Find a section by its id.
      *
      * @param string|array $uuid unique id or a list of ids
+     * @param array        $options related fields to load into the result
      *
-     * @throws \InvalidArgumentException
+     * @throws \Yam\Entities\Exception\EntityNotFoundException
      * @access public
-     * @return mixed either a Section or a SectionCollection
+     * @return \Yam\Entities\Section | \Yam\Entities\Collection
+     * either a Section or a SectionCollection
      */
     public function find($uuid, array $options = [])
     {
@@ -256,12 +117,15 @@ class SectionRepository
     }
 
     /**
-     * fetchAll
+     * Find all available sections in the system.
      *
+     * @param array $options related fields to load into the result
+     *
+     * @throws \Yam\Entities\Exception\EntityNotFoundException
      * @access public
-     * @return Collection
+     * @return \Yam\Entities\Collection
      */
-    public function findAll()
+    public function findAll(array $options = [])
     {
         if (!$this->count) {
 
@@ -277,7 +141,170 @@ class SectionRepository
         }
 
         $this->count = $this->manager->sections->count();
-        return $this->makeCollection($sections);
+
+        if ($this->count === 0) {
+            throw new EntityNotFoundException('No sections found.');
+        }
+
+        $this->applyAttributes($collection = $this->makeCollection($sections), $options);
+
+        return $collection;
+    }
+
+    /**
+     * Creates a new section from an input data array
+     *
+     * @param array $data the input data.
+     *
+     * @throws \Yam\Validators\Exception\ValidationException
+     * @throws \Yam\Entities\Exception\EntityCreateException
+     * @access public
+     * @return \Yam\Entities\Section instance of Section
+     */
+    public function create(array $data)
+    {
+        $this->validateSectionData($data);
+
+        $section = $this->makeSection($data, false);
+
+        $this->updateCount();
+
+        return $section;
+    }
+
+    /**
+     * Updates an existing section from an input data array and a given uuid.
+     *
+     * @param string $uuid the section uuid that is going ot be updated.
+     * @param array  $data the input data.
+     *
+     * @throws \Yam\Validators\Exception\ValidationException
+     * @access public
+     * @return \Yam\Entities\Section instance of Section
+     */
+    public function update($uuid, array $data)
+    {
+        $this->validateSectionData($data);
+
+        $this->updateSection($uuid, $data);
+
+        return $this->find($uuid);
+    }
+
+
+    /**
+     * Updates an existing Section entity and persits its data.
+     *
+     * Sections must be derieved from the sectionrepository.
+     *
+     * @param Section $section
+     *
+     * @throws \Yam\Validators\Exception\ValidationException
+     * @access public
+     * @return void
+     */
+    public function save(Section $section)
+    {
+        if ($section !== $this->find($section->uuid)) {
+            throw new \InvalidArgumentException(
+                sprintf('Sections must be derived from %s', get_class($this))
+            );
+        }
+
+        $data = $section->getData();
+
+        foreach ($section->fields as $index => $field) {
+            $data['fields'][$index] = $field->getData();
+        }
+
+        $this->update($data, $section->uuid);
+    }
+
+    /**
+     * Delete a Section entity from the system.
+     *
+     * @param \Yam\Entities\Section $section
+     *
+     * @access public
+     * @return void
+     */
+    public function delete(Section $section)
+    {
+        $this->db->beginTransaction();
+
+        $fields = $section->fields;
+
+        try {
+            $this->newSectionQuery()->delete($section->uuid);
+            $this->manager->sections->deleteEntity($section->uuid);
+        } catch (\Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        try {
+            $this->newFieldQuery()->delete($section->uuid);
+            $this->manager->sections->deleteEntity($section->uuid);
+        } catch (\Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        $this->db->commit();
+    }
+
+    /**
+     * getSectionValidator
+     *
+     * @param array $data
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function getSectionValidator(array $data = [])
+    {
+        $validator = $this->validator->get('yam.section');
+        $validator->with($data);
+
+        return $validator;
+    }
+
+    /**
+     * getSectionValidator
+     *
+     * @param array $data
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function getFieldValidator(array $data = [])
+    {
+        $validator = $this->validator->get('yam.field');
+        $validator->with($data);
+        return $validator;
+    }
+
+    /**
+     * applyAttributes
+     *
+     * @param mixed $resource
+     * @param array $options
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function applyAttributes($resource, array $options)
+    {
+        if ($resource instanceof Collection) {
+            foreach ($resource as $entity) {
+                $this->applyAttributes($entity, $options);
+            }
+            return;
+        }
+
+        foreach ($options as $attribute) {
+            $resource->getAttribute($attribute);
+        }
     }
 
     /**
@@ -421,7 +448,7 @@ class SectionRepository
      * makeSection
      *
      * @access protected
-     * @return Section
+     * @return \Yam\Entities\Section
      */
     protected function makeSection(array $data, $exists = false)
     {
@@ -433,9 +460,124 @@ class SectionRepository
 
         unset($data['fields']);
 
-        $this->saveSection($this->getSectionData($data), $fields);
+        $this->saveSectionData($this->getSectionData($data), $fields);
 
         return $this->find($uuid);
+    }
+
+    /**
+     * updateSection
+     *
+     * @param mixed $uuid
+     * @param array $data
+     *
+     * @access protected
+     * @return \Yam\Entities\Section
+     */
+    protected function updateSection($uuid, array $data)
+    {
+        $this->updateTimestamp($data);
+
+        $diff = $this->getFieldDiff($data['fields'], $uuid);
+
+        unset($data['fields']);
+
+
+        $this->db->beginTransaction();
+
+        // update section
+        try {
+            $this->newSectionQuery()->update($data);
+        } catch (\Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        // new fields
+        try {
+            $this->newFieldQuery()->insert($diff['new']);
+        } catch (\Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        // updated fields
+        try {
+            foreach ($diff['updated'] as $updated) {
+                $this->newFieldQuery()->update($updated);
+            }
+        } catch (\Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        // delete deleted fields
+        try {
+            foreach ($diff['deleted'] as $deleted) {
+                $this->newFieldQuery()->delete($deleted);
+            }
+        } catch (\Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        $this->db->commit();
+
+        // finally delete all deleted fields on the collection:
+        foreach ($diff['deleted'] as $deleted) {
+            $this->manager->fields->delete($deleted);
+        }
+
+        $fields = $this->execQuery($this->getFieldsQuery($uuid));
+
+        $this->manager->fields->loadData($fields);
+
+        return $this->find($uuid);
+    }
+
+    /**
+     * updateFields
+     *
+     * @param array $fields
+     * @param mixed $uuid
+     *
+     * @access protected
+     * @return array
+     */
+    protected function getFieldDiff(array $fields, $uuid)
+    {
+        $key    = [];
+        $new    = [];
+        $updated = [];
+
+        $existingFields = $this->find($uuid)->fields;
+        $existsingFieldKeys = $existingFields->pluck('id');
+
+        //separating new fields and dirty fields;
+
+        foreach ($fields as $fieldData) {
+
+            if (isset($fieldData['id'])) {
+
+                $keys[] = $fieldData['id'];
+
+                if ($existingFields->find($fieldData['id'])->isDirty()) {
+                    $this->updateTimestamp($fieldData);
+                    $updated = $fieldData;
+                }
+
+                continue;
+            }
+
+            $this->addTimestamps($fieldData);
+            $fieldData['section_uuid'] = $uuid;
+
+            $new[] = $fieldData;
+        }
+
+        $deleted = array_diff($existsingFieldKeys, $keys);
+
+        return compact('new', 'updated', 'deleted');
     }
 
     /**
@@ -447,7 +589,7 @@ class SectionRepository
      * @access protected
      * @return mixed
      */
-    protected function saveSection(array $sectionData, array $fieldData)
+    protected function saveSectionData(array $sectionData, array $fieldData)
     {
         // transaction save section:
         $this->db->beginTransaction();
@@ -468,20 +610,6 @@ class SectionRepository
         }
 
         $this->db->commit();
-    }
-
-    /**
-     * updateSection
-     *
-     * @param mixed $uuid
-     * @param array $data
-     *
-     * @access protected
-     * @return void
-     */
-    protected function updateSection($uuid, array $data)
-    {
-        $this->updateTimestamp($data);
     }
 
     /**
