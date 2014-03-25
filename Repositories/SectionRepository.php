@@ -258,16 +258,24 @@ class SectionRepository
         $this->db->beginTransaction();
 
         try {
-            $this->newSectionQuery()->delete($uuid);
-            $this->manager->sections->delete($uuid);
+            $this->newSectionQuery()
+                ->where('uuid', $uuid)
+                ->delete();
+            $this->manager->sections->removeEntity($uuid);
         } catch (\Exception $e) {
             $this->db->rollback();
             throw $e;
         }
 
         try {
-            $this->newFieldQuery()->delete($fieldIds = $fields->pluck('id'));
-            $this->manager->fields->delete($fieldIds);
+            $this->newFieldQuery()
+                ->where('section_uuid', $uuid)
+                ->delete();
+
+            foreach ($fields->pluck('id') as $id) {
+                $this->manager->fields->removeEntity($id);
+            }
+
         } catch (\Exception $e) {
             $this->db->rollback();
             throw $e;
