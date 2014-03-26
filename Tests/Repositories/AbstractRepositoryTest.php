@@ -54,6 +54,7 @@ abstract class AbstractRepositoryTest extends \PHPUnit_Framework_TestCase
     {
         $this->prepareDatabase();
         $this->migrate($this->schema);
+        $this->seed($this->db);
     }
 
     /**
@@ -87,8 +88,14 @@ abstract class AbstractRepositoryTest extends \PHPUnit_Framework_TestCase
         );
 
         $this->db = $db;
-        $this->schema = new SchemaBuilder($this->db->connection('sqlite'));
+        $connection = $this->db->connection('sqlite');
+        $connection->setSchemaGrammar(new \Illuminate\Database\Schema\Grammars\SQLiteGrammar);
+        $connection->setQueryGrammar(new \Illuminate\Database\Query\Grammars\SQLiteGrammar);
+
+        $this->schema = new SchemaBuilder($connection);
     }
 
     abstract protected function migrate(SchemaBuilder $schema);
+
+    abstract protected function seed($db);
 }

@@ -12,12 +12,14 @@
 namespace Yam\Entities\Tests\Repositories;
 
 use \Mockery as m;
+use \Carbon\Carbon;
+use \Faker\Factory as Faker;
+use \Illuminate\Support\Str;
 use \Aura\Marshal\Manager;
 use \Yam\Validators\ValidationRepository;
 use \Illuminate\Database\DatabaseManager;
 use \Yam\Entities\Repositories\SectionRepository;
 use \Illuminate\Database\Schema\Builder as SchemaBuilder;
-
 use Illuminate\Database\Connectors\ConnectionFactory;
 
 /**
@@ -45,6 +47,10 @@ class SectionRepositoryTest extends AbstractRepositoryTest
      */
     protected $repository;
 
+    protected $letSectionValidatorPass = true;
+
+    protected $letFieldValidatorPass = true;
+
     /**
      * @access protected
      * @return void
@@ -62,8 +68,9 @@ class SectionRepositoryTest extends AbstractRepositoryTest
      */
     protected function setUp()
     {
+        parent::setUp();
+
         $this->mocks = [];
-        $this->manager = new \Aura\Marshal\Manager();
     }
 
     /**
@@ -85,8 +92,108 @@ class SectionRepositoryTest extends AbstractRepositoryTest
      */
     public function itShouldCreateANewSection()
     {
-        $this->prepareDatabase();
+        $repo = $this->getTheRealThing();
+
+        $section = $repo->create([
+            'name'        => 'FooSection',
+            'handle'      => 'foo_section',
+            'versionable' => false,
+            'fields' => $this->getFieldData(4)
+        ]);
+
+        $this->assertInstanceof('Yam\Entities\Section', $section);
     }
+
+    /**
+     * @test
+     */
+    public function aSectionSouldBeInTheSystemAfterItsBeenCreated()
+    {
+        $repo = $this->getTheRealThing();
+
+        $section = $repo->create([
+            'name'        => 'FooSection',
+            'handle'      => 'foo_section',
+            'versionable' => false,
+            'fields' => $this->getFieldData(2)
+        ]);
+
+        $this->assertInstanceof('Yam\Entities\Section', $repo->find($section->uuid));
+    }
+
+    /**
+     * @test
+     */
+    public function fieldsSouldBeLoadedAfterCreatingASection()
+    {
+        $repo = $this->getTheRealThing();
+
+        $countFields = 4;
+
+        $section = $repo->create([
+            'name'        => 'FooSection',
+            'handle'      => 'foo_section',
+            'versionable' => false,
+            'fields' => $this->getFieldData($countFields)
+        ]);
+
+        $this->assertInstanceof('Yam\Entities\Collection', $section->fields);
+        $this->assertEquals($countFields, count($section->fields));
+    }
+
+    /**
+     * @test
+     */
+    public function itShouldFailCreatingIfFieldsAreMissing()
+    {
+        $repo = $this->getTheRealThing();
+
+        try {
+            $section = $repo->create([]);
+        } catch (\Yam\Validators\Exception\ValidationException $e) {
+            $this->assertInstanceof('Yam\Validators\Exception\ValidationException', $e);
+        } catch (\Exception $e) {
+            $this->fail();
+        }
+
+        //$this->assertInstance('Yam\Entities\Section', $section);
+    }
+
+    protected function getTheRealThing()
+    {
+        $manager = new \Aura\Marshal\Manager(
+            new \Yam\MarshalBridge\Type\Builder,
+            new \Aura\Marshal\Relation\Builder
+        );
+
+        $this->setUpDataManager($manager);
+
+        $repo = new SectionRepository($manager, $this->db, $this->getValidatorMock());
+
+        return $repo;
+    }
+
+    protected function getFieldData($count = 1)
+    {
+        $faker   = Faker::create();
+        $fields = [];
+        while ($count > 0) {
+            $name    = $faker->name;
+            $handle  = strtr(Str::slug($name), ['-', '_']);
+            $fields[] = [
+                'label' => $name,
+                'handle' => $handle,
+                'type_id' => 1,
+                'sorting' => $count + 1,
+                'position' => $count % 2 === 0 ? 'left' : 'right',
+                'settings' => []
+            ];
+            $count--;
+        }
+
+        return $fields;
+    }
+
 
     /**
      * getMockFrom
@@ -131,7 +238,37 @@ class SectionRepositoryTest extends AbstractRepositoryTest
      */
     protected function getValidatorMock()
     {
-        return m::mock('Yam\Validators\ValidationRepository');
+        $validatorA = m::mock('Some\Validator');
+        $validatorA->shouldReceive('with');
+
+        $validatorA->shouldReceive('validate')->andReturnUsing(function () {
+            return $this->letSectionValidatorPass;
+        });
+
+        $validatorA->shouldReceive('fails')->andReturnUsing(function () {
+            return !$this->letSectionValidatorPass;
+        });
+
+        $validatorB = m::mock('Some\Validator');
+        $validatorB->shouldReceive('with');
+
+        $validatorB->shouldReceive('validate')->andReturnUsing(function () {
+            return $this->letFieldValidatorPass;
+        });
+
+        $validatorB->shouldReceive('fails')->andReturnUsing(function () {
+            return !$this->letFieldValidatorPass;
+        });
+
+        $validatorA->shouldReceive('getErrors')->andReturn([]);
+        $validatorB->shouldReceive('getErrors')->andReturn([]);
+
+        $repo =  m::mock('Yam\Validators\ValidationRepository');
+
+        $repo->shouldReceive('get')->with('yam.section')->andReturn($validatorA);
+        $repo->shouldReceive('get')->with('yam.field')->andReturn($validatorB);
+
+        return $repo;
     }
 
     /**
@@ -202,6 +339,8 @@ class SectionRepositoryTest extends AbstractRepositoryTest
      */
     protected function setUpDataManager($manager)
     {
+        $collectionBuilder = new \Yam\Entities\Builders\CollectionBuilder;
+
         $manager->setType(
             'sections',
             [
@@ -232,5 +371,61 @@ class SectionRepositoryTest extends AbstractRepositoryTest
             'native_field'  => 'section_uuid',
             'foreign_field' => 'uuid'
         ]);
+    }
+
+    protected function seed($db)
+    {
+        $db->table('field_types')->insert($this->getFieldTypes());
+    }
+
+    protected function getFieldTypes()
+    {
+        $fieldTypes = [
+            [
+                'name'      => 'Input',
+                'namespace' => 'Yam\Entities\FieldTypes',
+                'type'      => 'string',
+                'defaults'  => '{"required":false}'
+            ],
+            [
+                'name'      => 'Markdown',
+                'namespace' => 'Yam\Entities\FieldTypes',
+                'type'      => 'text',
+                'defaults'  => '{"required":false}'
+            ],
+            [
+                'name'      => 'Textbox',
+                'namespace' => 'Yam\Entities\FieldTypes',
+                'type'      => 'text',
+                'defaults'  => '{"required":false}'
+            ],
+            [
+                'name'      => 'Checkbox',
+                'namespace' => 'Yam\Entities\FieldTypes',
+                'type'      => 'boolean',
+                'defaults'  => '{"required":false}'
+            ],
+            [
+                'name'      => 'Number',
+                'namespace' => 'Yam\Entities\FieldTypes',
+                'type'      => 'string',
+                'defaults'  => '{"required":false}'
+            ],
+            [
+                'name'      => 'Date',
+                'namespace' => 'Yam\Entities\FieldTypes',
+                'type'      => 'datetime',
+                'defaults'  => '{"required":false}'
+            ]
+        ];
+
+        $time = new Carbon();
+
+        foreach ($fieldTypes as &$ft) {
+            $ft['created_at'] = (string)$time;
+            $ft['updated_at'] = (string)$time;
+        }
+
+        return $fieldTypes;
     }
 }
