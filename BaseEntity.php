@@ -49,6 +49,18 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
     protected $eglConstraints;
 
     /**
+     * getKeyName
+     *
+     *
+     * @access public
+     * @return mixed
+     */
+    public function getKeyName()
+    {
+        return 'id';
+    }
+
+    /**
      * attributes
      *
      * @access public
@@ -203,11 +215,6 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
         return !$this->isNew() && in_array($key, $this->getImmutableKeys());
     }
 
-    public function getData()
-    {
-        return $this->data;
-    }
-
     /**
      * isNew
      *
@@ -216,7 +223,24 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
      */
     protected function isNew()
     {
-        return !(bool)$this->getDefault($this->data, 'uuid', false);
+        return !(bool)$this->getDefault($this->data, $this->getKeyName(), false);
+    }
+
+    /**
+     * fill
+     *
+     * @param array $data
+     *
+     * @access public
+     * @return mixed
+     */
+    protected function initializeData(array $data)
+    {
+        foreach ($data as $key => $value) {
+            if ($key && in_array($key, $this->getAssignableKeys())) {
+                $this->data[$key] = $this->setAttributeValue($key, $value);
+            }
+        }
     }
 
     /**

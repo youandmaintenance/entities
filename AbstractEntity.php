@@ -28,7 +28,7 @@ use \Illuminate\Support\Contracts\ArrayableInterface;
  * @author Thomas Appel <mail@thomas-appel.com>
  * @license MIT
  */
-class AbstractEntity extends GenericEntity implements ArrayableInterface, JsonableInterface
+class AbstractEntity extends GenericEntity implements EntityInterface, ArrayableInterface, JsonableInterface
 {
     use Getter;
 
@@ -46,7 +46,6 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
      */
     protected $original;
 
-
     /**
      * @param array $data
      *
@@ -54,7 +53,7 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
      */
     public function __construct(array $data)
     {
-        $this->fill($data);
+        $this->initializeData($data);
         $this->original = $this->data;
     }
 
@@ -116,6 +115,15 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
         return $value;
     }
 
+    /**
+     * setAttributeValue
+     *
+     * @param mixed $attr
+     * @param mixed $value
+     *
+     * @access public
+     * @return mixed
+     */
     public function setAttributeValue($attr, $value)
     {
         if (method_exists($this, $method = 'set'.ucfirst(camel_case($attr)).'AttributeValue')) {
@@ -170,16 +178,14 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
     }
 
     /**
-     * fillAttributes
-     *
-     * @param array $attributes
+     * getData
      *
      * @access public
-     * @return void
+     * @return mixed
      */
-    public function fillAttributes(array $attributes)
+    public function getData()
     {
-        return $this->data = $attributes;
+        return $this->data;
     }
 
     /**
@@ -243,6 +249,19 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
     protected function setDirty($dirty)
     {
         $this->dirty = (boolean)$dirty;
+    }
+
+    /**
+     * initializeData
+     *
+     * @param array $data
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function initializeData(array $data)
+    {
+        return $this->fill($data);
     }
 
 }

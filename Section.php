@@ -76,11 +76,9 @@ class Section extends BaseEntity
         return [
             'id',
             'uuid',
-            'entity',
             'name',
             'handle',
             'versionable',
-            'entries',
             'fields',
             'updated_at',
             'created_at'
@@ -98,8 +96,7 @@ class Section extends BaseEntity
     {
         return [
             'id',
-            'uuid',
-            'entity',
+            //'uuid',
             'created_at'
         ];
     }

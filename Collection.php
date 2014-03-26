@@ -11,14 +11,17 @@
 
 namespace Yam\Entities;
 
+use \Yam\MarshalBridge\Collection\AbstractCollection as BaseCollection;
+
 /**
- * @class SectionCollection
+ * @class Collection extends BaseCollection
+ * @see BaseCollection
  *
  * @package Yam\Entities
  * @version $Id$
  * @author Thomas Appel <mail@thomas-appel.com>
  * @license MIT
  */
-class Collection extends AbstractCollection
+class Collection extends BaseCollection
 {
 }

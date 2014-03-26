@@ -74,9 +74,9 @@ class SectionRepository implements RepositoryInterface, SaveableSectionInterface
     protected $findOnce;
 
     /**
-     * @param Manager              $manager
-     * @param DatabaseManager      $database
-     * @param ValidationRepository $validator
+     * @param \Aura\Marshal\Manager                $manager   the datamapper
+     * @param \Illuminate\Database\DatabaseManager $database  the database
+     * @param \Yam\Validators\ValidationRepository $validator the validator
      *
      * @access public
      * @return mixed
@@ -234,7 +234,6 @@ class SectionRepository implements RepositoryInterface, SaveableSectionInterface
      */
     protected function updateFields(Collection $fields, array $fieldData, $uuid)
     {
-
         $validateData = [];
 
         foreach ($fieldData as $fData) {
@@ -611,15 +610,19 @@ class SectionRepository implements RepositoryInterface, SaveableSectionInterface
      */
     protected function makeSection(array $data, $exists = false)
     {
-        $data['uuid'] = $uuid = (string)$this->makeUuid();
-
         $this->addTimestamps($data, true);
+
+        $uuid = (string)$this->makeUuid();
 
         $fields = $this->createFields($data['fields'], $uuid);
 
         unset($data['fields']);
 
-        $this->saveSectionData($this->getSectionData($data), $fields);
+        $data = $this->getSectionData($data);
+
+        $data['uuid'] = $uuid;
+
+        $this->saveSectionData($data, $fields);
 
         return $this->find($uuid);
     }
