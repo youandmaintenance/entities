@@ -105,10 +105,13 @@ class SectionRepository implements RepositoryInterface, SaveableSectionInterface
             throw new \InvalidArgumentException();
         }
 
-        if (null !== ($result = $this->getLoadedSectionsById($uuid))) {
-            $this->applyAttributes($result, $options);
-            return $result;
-        }
+        // will throw an exception if uuids are not present on the collection:
+        try {
+            if (null !== ($result = $this->getLoadedSectionsById($uuid))) {
+                $this->applyAttributes($result, $options);
+                return $result;
+            }
+        } catch (\Exception $e) {}
 
         if ($this->findOnce === $uuid) {
             $this->findOnce = null;

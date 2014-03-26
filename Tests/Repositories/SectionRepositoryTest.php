@@ -138,7 +138,12 @@ class SectionRepositoryTest extends AbstractRepositoryTest
         ]);
 
         $this->assertInstanceof('Yam\Entities\Collection', $section->fields);
-        $this->assertEquals($countFields, count($section->fields));
+
+        $this->assertEquals(
+            $countFields,
+            count($section->fields),
+            sprintf('Collection should have %d fields', $countFields)
+        );
     }
 
     /**
@@ -152,13 +157,98 @@ class SectionRepositoryTest extends AbstractRepositoryTest
             $section = $repo->create([]);
         } catch (\Yam\Validators\Exception\ValidationException $e) {
             $this->assertInstanceof('Yam\Validators\Exception\ValidationException', $e);
+            return;
         } catch (\Exception $e) {
-            $this->fail();
+            $this->fail($e->getMessage());
+            return;
         }
 
-        //$this->assertInstance('Yam\Entities\Section', $section);
+        $this->fail('A validation exception should be thrown');
     }
 
+    /**
+     * @test
+     */
+    public function itShouldFindSectionsByTheirUUID()
+    {
+        $ids = $this->seedSectionsAndReturnUuids(2, 2);
+
+        $repo = $this->getTheRealThing();
+        $this->assertInstanceof('Yam\Entities\Section', $repo->find($ids[0]));
+
+        $repo = $this->getTheRealThing();
+        $this->assertInstanceof('Yam\Entities\Collection', $collection = $repo->find($ids));
+
+        $this->assertEquals(
+            2,
+            count($collection[1]->fields),
+            sprintf('Collection should have %d fields', 2)
+        );
+    }
+
+    /**
+     * @test
+     */
+    public function itShouldSuccessfullyUpdateAsection()
+    {
+        $ids = $this->seedSectionsAndReturnUuids(1, 2);
+
+        $repo = $this->getTheRealThing();
+
+        $name = Faker::create()->name;
+
+        $section = $repo->find($ids[0]);
+
+        if ($name === $section->name) {
+            $name =  $name.rand();
+        }
+        $section->name = $name;
+
+        $repo->save($section);
+        $this->assertSame($name, $section->name);
+
+        $repo = $this->getTheRealThing();
+        $section = $repo->find($ids[0]);
+
+        $this->assertSame($name, $section->name);
+    }
+
+    /**
+     * @test
+     */
+    public function itShouldSuccessfullyUpdateNewData()
+    {
+        $ids = $this->seedSectionsAndReturnUuids(1, 1);
+
+        $repo = $this->getTheRealThing();
+
+        $section = $repo->find($ids[0], ['fields']);
+
+        $data = $section->toArray();
+
+        $fields = $this->getFieldData(5);
+
+        foreach ($fields as $f) {
+            $data['fields'][] = $f;
+        }
+
+        $repo->update($section->uuid, $data);
+
+        foreach ($section->fields as $f) {
+            if ($f->section_uuid !== $ids[0]) {
+                $this->fail('new fields should be created with the same parent uuid');
+            }
+        }
+
+        $this->assertEquals(6, count($section->fields));
+    }
+
+    /**
+     * Create the Repository with its realy dependancies,
+     *
+     * @access protected
+     * @return SectionRepository
+     */
     protected function getTheRealThing()
     {
         $manager = new \Aura\Marshal\Manager(
@@ -173,6 +263,72 @@ class SectionRepositoryTest extends AbstractRepositoryTest
         return $repo;
     }
 
+    /**
+     * Create some fake section and field data and seed the database.
+     *
+     * Will return and array of fake uuids that have been seeded.
+     *
+     * @param int $countSections
+     * @param int $countFields
+     *
+     * @access protected
+     * @return array
+     */
+    protected function seedSectionsAndReturnUuids($countSections = 1, $countFields = 1)
+    {
+        $fields = [];
+        $sections = [];
+        $uuids = [];
+
+        $faker   = Faker::create();
+        $time = (string)(new Carbon);
+
+        while ($countSections > 0) {
+            $uudis[] = $uuid  = $faker->uuid;
+            $name    = $faker->name;
+            $handle  = strtr(Str::slug($name), ['-', '_']);
+
+            $f = $this->getFieldData($countFields);
+
+            foreach ($f as &$fd) {
+                $fd['settings'] = json_encode($fd['settings']);
+                $fd['created_at'] = $time;
+                $fd['updated_at'] = $time;
+                $fd['section_uuid'] = $uuid;
+            }
+
+            $fields[] = $f;
+
+            $sec = [
+                'name'   => $name,
+                'handle' => $handle,
+                'versionable' => false,
+                'created_at' => $time,
+                'updated_at' => $time,
+                'uuid'       => $uuid
+            ];
+
+            $sections[] = $sec;
+            $countSections--;
+        }
+
+        $this->db->table('sections')->insert($sections);
+
+        foreach ($fields as $fieldData) {
+            $this->db->table('fields')->insert($fieldData);
+        }
+
+        return $uudis;
+    }
+
+    /**
+     * Generate some fake field data.
+     *
+     * @param int $count
+     *
+     * @access protected
+     * @return array
+     */
     protected function getFieldData($count = 1)
     {
         $faker   = Faker::create();
@@ -192,20 +348,6 @@ class SectionRepositoryTest extends AbstractRepositoryTest
         }
 
         return $fields;
-    }
-
-
-    /**
-     * getMockFrom
-     *
-     * @param mixed $type
-     *
-     * @access protected
-     * @return mixed
-     */
-    protected function getMockFrom($type)
-    {
-        return $this->mocks[$type];
     }
 
     /**
@@ -274,7 +416,6 @@ class SectionRepositoryTest extends AbstractRepositoryTest
     /**
      * getRepo
      *
-     *
      * @access protected
      * @return mixed
      */
@@ -288,12 +429,14 @@ class SectionRepositoryTest extends AbstractRepositoryTest
     }
 
     /**
-     * migrate
+     * Migrate the databse with initial tables.
+     *
+     * This will run before each test.
      *
      * @param SchemaBuilder $schema
      *
      * @access protected
-     * @return mixed
+     * @return void
      */
     protected function migrate(SchemaBuilder $schema)
     {
@@ -314,7 +457,7 @@ class SectionRepositoryTest extends AbstractRepositoryTest
             $table->integer('sorting');
             $table->string('label', 100);
             $table->string('handle', 100);
-            $table->string('position', 100);
+            $table->enum('position', ['left', 'right']);
             $table->text('settings');
             $table->timestamps();
         });
