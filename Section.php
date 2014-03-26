@@ -22,7 +22,6 @@ namespace Yam\Entities;
  */
 class Section extends BaseEntity
 {
-
     /**
      * getVersionableAttributeValue
      *
@@ -59,6 +58,11 @@ class Section extends BaseEntity
         }
 
         return $raw;
+    }
+
+    public function getData()
+    {
+        return $this->getOwnAttributes();
     }
 
     /**

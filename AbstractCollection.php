@@ -22,6 +22,8 @@ use \Illuminate\Support\Contracts\ArrayableInterface;
  */
 class AbstractCollection extends GenericCollection implements JsonableInterface, ArrayableInterface
 {
+    protected $entityKeyAttribute;
+
     /**
      * pluck
      *
@@ -33,6 +35,67 @@ class AbstractCollection extends GenericCollection implements JsonableInterface,
     public function pluck($attribute)
     {
         return array_pluck($this->data, $attribute);
+    }
+
+    /**
+     * merge
+     *
+     * @param GenericCollection $collection
+     *
+     * @access public
+     * @return mixed
+     */
+    public function merge(GenericCollection $collection)
+    {
+        foreach ($collection as $item) {
+            if (!in_array($item, $this->data)) {
+                $this->data[] = &$item;
+            }
+        }
+    }
+
+    /**
+     * replace
+     *
+     * @param GenericCollection $collection
+     *
+     * @access public
+     * @return void
+     */
+    public function replace(GenericCollection $collection)
+    {
+        $this->data = $collection->getData();
+    }
+
+    /**
+     * getData
+     *
+     *
+     * @access public
+     * @return array
+     */
+    public function getData()
+    {
+        return $this->data;
+    }
+
+    /**
+     * find
+     *
+     * @param mixed $key
+     *
+     * @access public
+     * @return mixed
+     */
+    public function findByAttribute($key, $attribute = 'id')
+    {
+        $attribute = $this->getEntityKeyAttribute();
+
+        $found = array_filter($this->data, function ($entity) use ($key, $attribute) {
+            return $key === $entity->{$attribute};
+        });
+
+        return array_head($found);
     }
 
     /**
@@ -70,5 +133,16 @@ class AbstractCollection extends GenericCollection implements JsonableInterface,
     public function toJson($options = 0)
     {
         return json_encode($this->toArray(), $options);
+    }
+
+    /**
+     * getEntityKeyAttribute
+     *
+     * @access protected
+     * @return string
+     */
+    protected function getEntityKeyAttribute()
+    {
+        return $this->entityKeyAttribute;
     }
 }

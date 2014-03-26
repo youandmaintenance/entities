@@ -49,17 +49,6 @@ abstract class BaseEntity extends AbstractEntity implements AssignableConstraint
     protected $eglConstraints;
 
     /**
-     * @param mixed $data
-     *
-     * @access public
-     * @return mixed
-     */
-    public function __construct($data = [])
-    {
-        parent::__construct($data);
-    }
-
-    /**
      * attributes
      *
      * @access public

@@ -54,8 +54,8 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
      */
     public function __construct(array $data)
     {
-        $this->original = $data;
         $this->fill($data);
+        $this->original = $this->data;
     }
 
     /**
@@ -66,7 +66,7 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
      * @access portected
      * @return void
      */
-    protected function fill(array $data)
+    public function fill(array $data)
     {
         foreach ($data as $key => $value) {
             $this->setAttribute($key, $value);
@@ -85,7 +85,7 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
 
         if (!$this->dirty) {
             foreach ($this->data as $key => $d) {
-                if ($d === null ||
+                if (//$d === null ||
                     $d instanceof LazyInterface ||
                     (array_key_exists($key, $o) && $o[$key] === $d)
                 ) {
@@ -221,6 +221,8 @@ class AbstractEntity extends GenericEntity implements ArrayableInterface, Jsonab
                 $value = null;
             } elseif ($data instanceof ArrayableInterface) {
                 $value = $data->toArray();
+            } elseif (is_object($data)) {
+                $value = (array)$data;
             } else {
                 $value = $data;
             }

@@ -14,6 +14,7 @@ namespace Yam\Entities\Repositories;
 use \Carbon\Carbon;
 use \Aura\Marshal\Manager;
 use \Yam\Entities\Section;
+use \Yam\Entities\Collection;
 use \Yam\Validators\ValidationRepository;
 use \Yam\Utils\Traits\UuidGeneratorTrait;
 use \Illuminate\Database\DatabaseManager;
@@ -28,7 +29,7 @@ use \Yam\Entities\Exception\EntityCreateException;
  * @author Thomas Appel <mail@thomas-appel.com>
  * @license MIT
  */
-class SectionRepository
+class SectionRepository implements RepositoryInterface, SaveableSectionInterface, DeletableSectionInterface
 {
     use UuidGeneratorTrait {
         UuidGeneratorTrait::createUuid as private makeUuid;
@@ -198,48 +199,139 @@ class SectionRepository
      */
     public function update($uuid, array $data)
     {
+        $section = $this->find($uuid, ['fields']);
+
+        $data = array_merge($section->getData(), $data);
+
         $this->validateSectionData($data);
 
-        $this->updateSection($uuid, $data);
+        $fields = isset($data['fields']) ? $data['fields'] : false;
+        unset($data['fields']);
 
-        return $this->find($uuid);
+        $section->fill($data);
+
+        if ($section->isDirty()) {
+            $section->updated_at = (string)$this->newTimestamp();
+            $this->persistsSection($section);
+        }
+
+        if ($fields) {
+            $this->updateFields($section->fields, $fields, $section->uuid);
+        }
+
+        return $section;
     }
 
+    /**
+     * updateFields
+     *
+     * @param Collection $fields
+     * @param array $fieldData
+     * @param mixed $uuid
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function updateFields(Collection $fields, array $fieldData, $uuid)
+    {
+
+        $validateData = [];
+
+        foreach ($fieldData as $fData) {
+
+            if (isset($fData['id'])) {
+                $field = $this->manager->fields->getEntity($fData['id']);
+                $validateData[] = array_merge($field->getData(), $fData);
+            } else {
+                $validateData[] = $fData;
+            }
+        }
+
+        $this->validateFieldData($validateData, true);
+        $diff = $this->getFieldDiff($fields, $validateData, $uuid);
+
+        $this->db->beginTransaction();
+
+        // updated fields:
+        try {
+            foreach ($diff['updated'] as $updated) {
+                $this->newFieldQuery()
+                    ->where('id', $updated['id'])
+                    ->update($updated);
+            }
+        } catch (\Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        // deleted fields:
+        if ($deleted = (bool)$diff['deleted']) {
+            try {
+                $this->newFieldQuery()
+                    ->whereIn('id', $diff['deleted'])
+                    ->delete();
+            } catch (\Exception $e) {
+                $this->db->rollback();
+                throw $e;
+            }
+        }
+
+        // new fields:
+        if ($new = (bool)$diff['new']) {
+            try {
+                $this->newFieldQuery()->insert($diff['new']);
+            } catch (\Exception $e) {
+                $this->db->rollback();
+                throw $e;
+            }
+        }
+
+        $this->db->commit();
+
+        // update new fields on the collection.
+        if ($new || $deleted) {
+            $result = $this->execQuery($this->getFieldsQuery($uuid));
+            $this->manager->fields->load($result);
+            $fields->replace($this->manager->fields->getCollection(array_pluck($result, 'id')));
+        }
+
+        // update removed fields on the collection.
+        if ($deleted) {
+            foreach($diff['deleted'] as $id) {
+                $this->manager->fields->removeEntity($id);
+            }
+        }
+    }
 
     /**
-     * Updates an existing Section entity and persits its data.
-     *
-     * Sections must be derieved from the sectionrepository.
+     * persistsSection
      *
      * @param Section $section
      *
-     * @throws \Yam\Validators\Exception\ValidationException
-     * @access public
-     * @return void
-     */
-    public function save(Section $section)
-    {
-        if ($section !== $this->find($section->uuid)) {
-            throw new \InvalidArgumentException(
-                sprintf('Sections must be derived from %s', get_class($this))
-            );
-        }
-
-        $section->fields;
-        $this->update($section->uuid, $section->toArray());
-    }
-
-    /**
-     * deleteSection
-     *
-     * @param \Yam\Entities\Section $section
-     *
-     * @access public
+     * @access protected
      * @return mixed
      */
-    public function deleteSection(Section $section)
+    protected function persistsSection(Section $section)
     {
-        return $this->delete($section->uuid);
+        $this->db->beginTransaction();
+
+        $update = (bool)$section->id;
+        $q = $this->newSectionQuery();
+
+        try {
+            if ($update) {
+                $q->where('uuid', $section->uuid)
+                ->update($section->getData());
+            } else {
+                $q->insert($section->getData());
+            }
+
+        } catch (\Exception $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        $this->db->commit();
     }
 
     /**
@@ -285,12 +377,49 @@ class SectionRepository
     }
 
     /**
+     * Updates an existing Section entity and persits its data.
+     *
+     * Sections must be derieved from the sectionrepository.
+     *
+     * @param Section $section
+     *
+     * @throws \Yam\Validators\Exception\ValidationException if $section wasn't
+     * derived from this repository.
+     * @access public
+     * @return void
+     */
+    public function save(Section $section)
+    {
+        if ($section !== $this->find($section->uuid)) {
+            throw new \InvalidArgumentException(
+                sprintf('Sections must be derived from %s', get_class($this))
+            );
+        }
+
+        $section->fields;
+        $this->update($section->uuid, $section->toArray());
+    }
+
+    /**
+     * deleteSection
+     *
+     * @param \Yam\Entities\Section $section
+     *
+     * @access public
+     * @return mixed
+     */
+    public function deleteSection(Section $section)
+    {
+        return $this->delete($section->uuid);
+    }
+
+    /**
      * getSectionValidator
      *
      * @param array $data
      *
      * @access protected
-     * @return mixed
+     * @return Validator
      */
     protected function getSectionValidator(array $data = [])
     {
@@ -306,7 +435,7 @@ class SectionRepository
      * @param array $data
      *
      * @access protected
-     * @return mixed
+     * @return Validator
      */
     protected function getFieldValidator(array $data = [])
     {
@@ -496,80 +625,6 @@ class SectionRepository
     }
 
     /**
-     * updateSection
-     *
-     * @param mixed $uuid
-     * @param array $data
-     *
-     * @access protected
-     * @return \Yam\Entities\Section
-     */
-    protected function updateSection($uuid, array $data)
-    {
-        $this->updateTimestamp($data);
-
-        $diff = $this->getFieldDiff($data['fields'], $uuid);
-
-        unset($data['fields']);
-
-
-        $this->db->beginTransaction();
-
-        // update section
-        try {
-            $this->newSectionQuery()
-                ->where('uuid', $uuid)
-                ->update($data);
-        } catch (\Exception $e) {
-            $this->db->rollback();
-            throw $e;
-        }
-
-        // new fields
-        try {
-            $this->newFieldQuery()->insert($diff['new']);
-        } catch (\Exception $e) {
-            $this->db->rollback();
-            throw $e;
-        }
-
-        // updated fields
-        try {
-            foreach ($diff['updated'] as $updated) {
-                $this->newFieldQuery()
-                    ->where('id', $updated['id'])
-                    ->update($updated);
-            }
-        } catch (\Exception $e) {
-            $this->db->rollback();
-            throw $e;
-        }
-
-        // delete deleted fields
-        try {
-            foreach ($diff['deleted'] as $deleted) {
-                $this->newFieldQuery()->delete($deleted);
-            }
-        } catch (\Exception $e) {
-            $this->db->rollback();
-            throw $e;
-        }
-
-        $this->db->commit();
-
-        // finally delete all deleted fields on the collection:
-        foreach ($diff['deleted'] as $deleted) {
-            $this->manager->fields->delete($deleted);
-        }
-
-        $fields = $this->execQuery($this->getFieldsQuery($uuid));
-
-        $this->manager->fields->load($fields);
-
-        return $this->find($uuid);
-    }
-
-    /**
      * updateFields
      *
      * @param array $fields
@@ -578,13 +633,12 @@ class SectionRepository
      * @access protected
      * @return array
      */
-    protected function getFieldDiff(array $fields, $uuid)
+    protected function getFieldDiff(Collection $existingFields, array $fields, $uuid)
     {
-        $key    = [];
-        $new    = [];
+        $keys    = [];
+        $new     = [];
         $updated = [];
 
-        $existingFields = $this->find($uuid)->fields;
         $existsingFieldKeys = $existingFields->pluck('id');
 
         //separating new fields and dirty fields;
@@ -595,19 +649,31 @@ class SectionRepository
 
                 $keys[] = $fieldData['id'];
 
-                if ($this->manager->fields->getEntity($fieldData['id'])->isDirty()) {
-                    $this->updateTimestamp($fieldData);
-                    $updated[] = $this->newFieldInstance($fieldData)->getData();
+                if ($field = $this->manager->fields->getEntity($fieldData['id'])) {
+
+                    $field->fill($fieldData);
+
+                    if ($field->isDirty()) {
+                        $field->updated_at = (string)$this->newTimestamp();
+                        $updated[] = $field->getData();
+                    }
                 }
 
                 continue;
             }
 
-            $this->addTimestamps($fieldData);
             $fieldData['section_uuid'] = $uuid;
-
+            $this->addTimestamps($fieldData);
             $new[] = $this->newFieldInstance($fieldData)->getData();
         }
+
+        $updatedKeys = array_pluck($updated, 'id');
+
+        //foreach ($existingFields as $field) {
+        //    if (!in_array($field->id, $updatedKeys) && $field->isDirty()) {
+        //        $updated[] = $field->getData();
+        //    }
+        //}
 
         $deleted = array_diff($existsingFieldKeys, $keys);
 
@@ -838,35 +904,53 @@ class SectionRepository
      * @access protected
      * @return mixed
      */
-    protected function validateSectionData(array $data)
+    protected function validateSectionData(array $data, $withFields = true, &$messages = [])
     {
         $errored  = false;
 
         $validator = $this->getSectionValidator($data);
 
-        if (!isset($data['fields']) || empty($data['fields'])) {
+        if ($withFields && !isset($data['fields']) || empty($data['fields'])) {
 
             $validator->fails(['fields' => ['empty fields']]);
             throw new ValidationException('validation failed', $validator->getErrors());
         }
 
-        $messages = [];
 
         if(!$validator->validate($data)) {
             $messages['section'] = $validator->getErrors()->toArray();
         }
 
+        if ($withFields) {
+            $this->validateFieldData($data['fields'], false, $messages);
+        }
+
+        if (!empty($messages)) {
+            throw new ValidationException('validation failed', $messages);
+        }
+    }
+
+    /**
+     * validateFieldData
+     *
+     * @param array $fields
+     * @param mixed $thow
+     * @param array $messages
+     *
+     * @access protected
+     * @return mixed
+     */
+    protected function validateFieldData(array $fields, $throw = true, array &$messages = [])
+    {
         $fieldValidator = $this->getFieldValidator();
 
-        foreach ($data['fields'] as $key => $field) {
+        foreach ($fields as $key => $field) {
             if (!$fieldValidator->validate($field)) {
                 $messages['fields'][] = $fieldValidator->getErrors()->toArray();
             }
         }
 
-        if (!empty($messages)) {
-            var_dump($messages);
-            die;
+        if ($throw && !empty($messages)) {
             throw new ValidationException('validation failed', $messages);
         }
     }
