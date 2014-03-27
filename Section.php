@@ -23,6 +23,17 @@ namespace Yam\Entities;
 class Section extends BaseEntity
 {
     /**
+     * getKeyName
+     *
+     * @access public
+     * @return mixed
+     */
+    public function getKeyName()
+    {
+        return 'uuid';
+    }
+
+    /**
      * getVersionableAttributeValue
      *
      * @param mixed $value
@@ -96,7 +107,7 @@ class Section extends BaseEntity
     {
         return [
             'id',
-            //'uuid',
+            'uuid',
             'created_at'
         ];
     }

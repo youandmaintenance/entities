@@ -24,6 +24,7 @@ class AbstractCollection extends GenericCollection implements JsonableInterface,
 {
     protected $entityKeyAttribute;
 
+
     /**
      * pluck
      *

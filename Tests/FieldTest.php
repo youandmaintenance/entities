@@ -29,7 +29,7 @@ class FieldTest extends \PHPUnit_Framework_TestCase
      */
     public function itShouldBeInstatiable()
     {
-        $field = new Field;
+        $field = new Field([]);
         $this->assertInstanceOf('Yam\Entities\Field', $field);
     }
 }

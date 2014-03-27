@@ -1,0 +1,19 @@
+{
+    "name": "yam/entities",
+    "require": {
+        "yam/marshal-bridge": "dev-master",
+        "illuminate/support": "4.1.*",
+        "illuminate/database": "4.1.*"
+    },
+    "require-dev": {
+        "mockery/mockery": "dev-master"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Thomas Appel",
+            "email": "mail@thomas-appel.com"
+        }
+    ],
+    "minimum-stability": "dev"
+}

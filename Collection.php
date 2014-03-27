@@ -24,4 +24,8 @@ use \Yam\MarshalBridge\Collection\AbstractCollection as BaseCollection;
  */
 class Collection extends BaseCollection
 {
+    protected function getItemAttributeValue($item, $attribute)
+    {
+        return $item->getAttribute($attribute);
+    }
 }
