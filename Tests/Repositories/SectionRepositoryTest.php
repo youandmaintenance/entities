@@ -429,14 +429,7 @@ class SectionRepositoryTest extends AbstractRepositoryTest
     }
 
     /**
-     * Migrate the databse with initial tables.
-     *
-     * This will run before each test.
-     *
-     * @param SchemaBuilder $schema
-     *
-     * @access protected
-     * @return void
+     * {@inheritdoc}
      */
     protected function migrate(SchemaBuilder $schema)
     {
@@ -470,6 +463,14 @@ class SectionRepositoryTest extends AbstractRepositoryTest
             $table->text('defaults');
             $table->timestamps();
         });
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function seed(DatabaseManager $db)
+    {
+        $db->table('field_types')->insert($this->getFieldTypes());
     }
 
     /**
@@ -516,11 +517,13 @@ class SectionRepositoryTest extends AbstractRepositoryTest
         ]);
     }
 
-    protected function seed($db)
-    {
-        $db->table('field_types')->insert($this->getFieldTypes());
-    }
-
+    /**
+     * seed values of field types.
+     *
+     *
+     * @access protected
+     * @return array
+     */
     protected function getFieldTypes()
     {
         $fieldTypes = [
